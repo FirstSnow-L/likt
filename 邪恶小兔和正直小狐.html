@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>邪恶兔子 & 正直小狐：每一个心跳瞬间，都因你而动</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at center, #260528 0%, #130219 50%, #050009 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+    #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+    /* 爱心正中央纯净发光文字（垂直位置由 JS 按心形最宽处动态计算） */
+    .center-title {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 2;
+      pointer-events: none;
+      text-align: center;
+      width: 100%;
+      opacity: 0;
+      transition: opacity 1.8s ease-out;
+    }
+    .center-title.visible {
+      opacity: 1;
+    }
+    .names {
+      font-size: clamp(1.25rem, 4vw, 1.95rem);
+      font-weight: 700;
+      letter-spacing: 3px;
+      color: #ffffff;
+      /* 白色实心字 + 极窄暗色描边晕 + 粉光，保证压在密集粒子上依然清晰可读 */
+      text-shadow:
+        0 1px 3px rgba(48, 0, 32, 0.95),
+        0 0 10px rgba(48, 0, 32, 0.8),
+        0 0 22px rgba(255, 80, 180, 0.85),
+        0 0 40px rgba(210, 40, 200, 0.55);
+      animation: textPulse 1.25s infinite ease-in-out;
+      white-space: nowrap;
+    }
+    .heart-icon {
+      display: inline-block;
+      color: #ff2a85;
+      margin: 0 6px;
+      filter: drop-shadow(0 0 10px #ff2a85);
+    }
+    /* 底部专属纪念与计时，优雅沉底，与爱心主体错落有致，绝无矩形色块遮挡 */
+    .bottom-card {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 92%;
+      max-width: 500px;
+      line-height: 1.5;
+    }
+    .subtitle {
+      font-size: 0.90rem;
+      color: #ffd6f0;
+      letter-spacing: 2px;
+      opacity: 0.92;
+      text-shadow: 0 0 10px rgba(230, 90, 210, 0.7);
+      margin-bottom: 5px;
+      white-space: nowrap;
+    }
+    .timer-text {
+      font-size: 0.82rem;
+      color: #f7a8e5;
+      letter-spacing: 1px;
+      text-shadow: 0 0 8px rgba(220, 40, 180, 0.6);
+      opacity: 0.88;
+      white-space: nowrap;
+    }
+    .timer-highlight {
+      font-weight: bold;
+      color: #ffffff;
+      margin: 0 2px;
+      text-shadow: 0 0 10px #fff;
+    }
+    /* 音乐唱片交互按钮 */
+    .music-btn {
+      position: absolute;
+      top: 22px;
+      right: 22px;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: rgba(220, 40, 180, 0.18);
+      border: 1px solid rgba(230, 100, 210, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      cursor: pointer;
+      backdrop-filter: blur(6px);
+      transition: all 0.3s ease;
+      box-shadow: 0 0 18px rgba(220, 40, 180, 0.35);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .music-btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 25px rgba(255, 45, 85, 0.6);
+    }
+    .music-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: #ffccd5;
+      transition: transform 2s linear;
+    }
+    .music-btn.playing svg {
+      animation: rotateDisc 4s linear infinite;
+    }
+    /* 点击提示光标：避开底部计时区域，错落摆放 */
+    .hint-toast {
+      position: absolute;
+      bottom: 72px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 210, 235, 0.7);
+      font-size: 0.78rem;
+      letter-spacing: 2px;
+      z-index: 2;
+      pointer-events: none;
+      animation: fadeInOut 3s infinite ease-in-out;
+      white-space: nowrap;
+      transition: opacity 0.8s ease, transform 0.8s ease;
+    }
+    .hint-toast.hidden {
+      opacity: 0 !important;
+      transform: translate(-50%, 10px) !important;
+    }
+    /* 移动端专属精致适配 */
+    @media (max-width: 600px) {
+      .names {
+        font-size: clamp(1.15rem, 5vw, 1.65rem);
+        letter-spacing: 2px;
+      }
+      .subtitle {
+        font-size: 0.80rem;
+        letter-spacing: 1px;
+      }
+      .timer-text {
+        font-size: 0.74rem;
+        letter-spacing: 0.5px;
+      }
+      .hint-toast {
+        bottom: 66px;
+        font-size: 0.70rem;
+      }
+      .music-btn {
+        top: 16px;
+        right: 16px;
+        width: 38px;
+        height: 38px;
+      }
+    }
+    @keyframes textPulse {
+      0%, 100% { transform: scale(1); opacity: 0.92; }
+      15% { transform: scale(1.08); opacity: 1; }
+      30% { transform: scale(1.02); opacity: 0.95; }
+      45% { transform: scale(1.06); opacity: 1; }
+    }
+    @keyframes rotateDisc {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes fadeInOut {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.85; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <!-- 爱心正中央纯净发光昵称（无遮挡无底色，与粒子同频呼吸） -->
+  <div class="center-title" id="centerTitle">
+    <div class="names">邪恶兔子<span class="heart-icon">❤</span>正直小狐</div>
+  </div>
+
+  <!-- 底部专属纪念与计时，优雅沉底，与爱心主体错落有致 -->
+  <div class="bottom-card">
+    <div class="subtitle">2026.11.06 · 每一个心跳瞬间，都因你而动</div>
+    <div class="timer-text" id="timerBox">心动计时中...</div>
+  </div>
+
+  <div class="music-btn" id="musicBtn" title="音乐开关">
+    <svg viewBox="0 0 24 24">
+      <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+    </svg>
+  </div>
+
+  <div class="hint-toast" id="hintToast">✨ 轻触屏幕 唤醒浪漫乐章与流光微尘</div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const centerTitle = document.getElementById('centerTitle');
+    const hintToast = document.getElementById('hintToast');
+    const musicBtn = document.getElementById('musicBtn');
+
+    let width = 0, height = 0, dpr = 1, cx = 0, cy = 0;
+    let heartScaleFactor = 1;
+    const OPENING_DURATION = 2.2; // 前 2.2 秒粒子汇聚揭幕
+
+    // 1. 预渲染柔光粒子精灵（径向渐变，高帧率且拥有朦胧星光微晕）
+    function createGlowSprite(colorInner, colorOuter, size = 32) {
+      const offCanvas = document.createElement('canvas');
+      offCanvas.width = size;
+      offCanvas.height = size;
+      const offCtx = offCanvas.getContext('2d');
+      const r = size / 2;
+      const grad = offCtx.createRadialGradient(r, r, 0, r, r, r);
+      grad.addColorStop(0, colorInner);
+      grad.addColorStop(0.35, colorOuter);
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      offCtx.fillStyle = grad;
+      offCtx.fillRect(0, 0, size, size);
+      return offCanvas;
+    }
+    const spriteWhite = createGlowSprite('rgba(255,255,255,1)', 'rgba(255,210,240,0.75)', 32);
+    const spritePink = createGlowSprite('rgba(255,230,250,1)', 'rgba(255,80,170,0.68)', 32);
+    const spritePurple = createGlowSprite('rgba(255,210,245,0.95)', 'rgba(195,60,255,0.62)', 32);
+    const glowSprites = [spriteWhite, spritePink, spritePurple];
+
+    // 2. 真实质心对齐的笛卡尔心形方程 (scale=10.5 为几何基准)
+    const Y_OFFSET = 2.54;
+    function heartCurve(t) {
+      const x = 16 * Math.pow(Math.sin(t), 3);
+      const rawY = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+      return { x: x * 10.5, y: (rawY - Y_OFFSET) * 10.5 };
+    }
+
+    // 预计算心形多边形顶点（用于 2D 内部均匀拒绝采样，彻底消除中轴竖线）
+    const heartPoly = [];
+    const POLY_SAMPLES = 360;
+    for (let i = 0; i < POLY_SAMPLES; i++) {
+      const t = (i / POLY_SAMPLES) * Math.PI * 2;
+      heartPoly.push(heartCurve(t));
+    }
+
+    function isInsideHeart(px, py) {
+      let inside = false;
+      for (let i = 0, j = heartPoly.length - 1; i < heartPoly.length; j = i++) {
+        const xi = heartPoly[i].x, yi = heartPoly[i].y;
+        const xj = heartPoly[j].x, yj = heartPoly[j].y;
+        const intersect = ((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    }
+
+    // 预计算轮廓弧长累计表：按弧长等距采样，修复凹口与尖端处粒子堆积成竖亮线
+    const arcTable = [];
+    let arcTotal = 0;
+    for (let i = 0; i < POLY_SAMPLES; i++) {
+      const a = heartPoly[i];
+      const b = heartPoly[(i + 1) % POLY_SAMPLES];
+      const seg = Math.hypot(b.x - a.x, b.y - a.y);
+      arcTable.push({ start: arcTotal, seg: seg, a: a, b: b });
+      arcTotal += seg;
+    }
+
+    function sampleOutline() {
+      const target = Math.random() * arcTotal;
+      let lo = 0, hi = arcTable.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (arcTable[mid].start + arcTable[mid].seg < target) lo = mid + 1;
+        else hi = mid;
+      }
+      const s = arcTable[lo];
+      const k = s.seg > 0 ? (target - s.start) / s.seg : 0;
+      return {
+        x: s.a.x + (s.b.x - s.a.x) * k,
+        y: s.a.y + (s.b.y - s.a.y) * k
+      };
+    }
+
+    // 3. 响应式布局：手机竖屏专属饱满比例，动态同步文字位置
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      ctx.scale(dpr, dpr);
+      cx = width / 2;
+
+      if (width < height) {
+        // 手机竖屏：爱心宽度占据屏幕宽度的约 76%，居中偏上，留出下方仪式感空间
+        heartScaleFactor = (width * 0.76) / 330;
+        cy = height * 0.45;
+      } else {
+        // 桌面宽屏：经典优雅比例
+        heartScaleFactor = Math.min(width, height) / 520;
+        cy = height / 2 + 8;
+      }
+
+      // 文字垂直定位：心形最宽处在 y=-6.54(曲线单位)，取其略下方 y=-4.8，
+      // 此时心形全宽约 31.8 单位（中心处仅 26.5），文字方能被轮廓完整包裹
+      if (centerTitle) {
+        const TITLE_CURVE_Y = -4.8;
+        centerTitle.style.top = (cy + TITLE_CURVE_Y * 10.5 * heartScaleFactor) + 'px';
+      }
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // 4. 精致舒缓的心跳律动函数（12% 舒张充盈，告别生硬爆炸）
+    function getHeartScale(timeSec) {
+      if (timeSec < OPENING_DURATION) return 1.0;
+      const cycle = (timeSec - OPENING_DURATION) % 1.25;
+      if (cycle < 0.16) {
+        return 1.0 + Math.sin((cycle / 0.16) * Math.PI) * 0.12;
+      } else if (cycle < 0.32) {
+        return 1.0 + Math.sin(((cycle - 0.16) / 0.16) * Math.PI) * 0.055;
+      }
+      return 1.0;
+    }
+
+    // 缓动函数
+    function easeOutCubic(x) {
+      return 1 - Math.pow(1 - x, 3);
+    }
+
+    // 5. 核心爱心粒子系统（彻底消灭中轴线 + 聚星成心揭幕仪式）
+    // 手机端适当降低粒子数以稳定 60fps，桌面端保持高密度星河
+    const IS_SMALL_SCREEN = Math.min(window.innerWidth, window.innerHeight) < 600;
+    const CORE_COUNT = IS_SMALL_SCREEN ? 1900 : 2600;
+    class HeartParticle {
+      constructor(index) {
+        this.index = index;
+        this.initTarget();
+        this.initStart();
+      }
+      initTarget() {
+        // 22% 勾勒轮廓，78% 在 2D 面积内均匀填充（粒子细密如星尘，不糊成白管）
+        this.isShell = this.index < CORE_COUNT * 0.22;
+        if (this.isShell) {
+          const pt = sampleOutline();
+          const jitter = (Math.random() - 0.5) * 0.05;
+          this.targetX = pt.x * (1 + jitter);
+          this.targetY = pt.y * (1 + jitter);
+          this.baseSize = Math.random() * 4.5 + 5.5;   // 直径 5.5~10px
+          this.alpha = Math.random() * 0.30 + 0.42;    // 0.42~0.72
+          this.sprite = Math.random() < 0.12 ? glowSprites[0] : (Math.random() < 0.62 ? glowSprites[1] : glowSprites[2]);
+        } else {
+          // 2D 内部均匀拒绝采样（彻底消灭中轴白线）
+          let rx = 0, ry = 0;
+          let safe = 0;
+          do {
+            rx = (Math.random() - 0.5) * 336; // 32 * 10.5
+            ry = (Math.random() - 0.5) * 315; // 30 * 10.5
+            safe++;
+          } while (!isInsideHeart(rx, ry) && safe < 60);
+
+          this.targetX = rx;
+          this.targetY = ry;
+          this.baseSize = Math.random() * 3.5 + 3.5;   // 直径 3.5~7px
+          this.alpha = Math.random() * 0.38 + 0.20;    // 0.20~0.58
+          this.sprite = Math.random() < 0.10 ? glowSprites[0] : (Math.random() < 0.60 ? glowSprites[1] : glowSprites[2]);
+        }
+
+        this.jitterSpeed = Math.random() * 2 + 1.2;
+        this.jitterAmp = Math.random() * 2 + 0.8;
+        this.pulseDelay = Math.random() * Math.PI * 2;
+      }
+      initStart() {
+        // 开场从屏幕四周深空飞入（距离收近 + 逐颗错峰，避免满屏噪点）
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.max(width, height) * (Math.random() * 0.35 + 0.45);
+        this.startX = Math.cos(angle) * dist;
+        this.startY = Math.sin(angle) * dist;
+        this.curX = this.startX;
+        this.curY = this.startY;
+        this.startDelay = Math.random() * 0.75;   // 逐颗错峰入场
+      }
+      draw(timeSec, scale) {
+        if (timeSec < OPENING_DURATION) {
+          // 开场汇聚动画：错峰 + 淡入 + 三次缓出
+          const span = Math.max(0.35, OPENING_DURATION - this.startDelay);
+          const p = Math.max(0, Math.min(1, (timeSec - this.startDelay) / span));
+          const progress = easeOutCubic(p);
+          this.curX = this.startX + (this.targetX * heartScaleFactor - this.startX) * progress;
+          this.curY = this.startY + (this.targetY * heartScaleFactor - this.startY) * progress;
+
+          const fadeIn = Math.min(1, Math.max(0, (timeSec - this.startDelay) / 0.45));
+          const screenX0 = cx + this.curX;
+          const screenY0 = cy + this.curY;
+          const r0 = this.baseSize * 0.5;
+          ctx.globalAlpha = this.alpha * fadeIn * 0.9;
+          ctx.drawImage(this.sprite, screenX0 - r0, screenY0 - r0, this.baseSize, this.baseSize);
+          return;
+        } else {
+          // 正常心动与微弱生命抖动
+          const jitter = Math.sin(timeSec * this.jitterSpeed + this.pulseDelay) * this.jitterAmp;
+          this.curX = this.targetX * heartScaleFactor * scale + jitter;
+          this.curY = this.targetY * heartScaleFactor * scale + jitter;
+        }
+
+        const screenX = cx + this.curX;
+        const screenY = cy + this.curY;
+        const r = this.baseSize * 0.5;
+
+        ctx.globalAlpha = this.alpha;
+        ctx.drawImage(this.sprite, screenX - r, screenY - r, this.baseSize, this.baseSize);
+      }
+    }
+
+    // 6. 心动柔美光环波纹（Pulse Shockwave Aura）
+    class PulseWave {
+      constructor(scale) {
+        this.scale = scale;
+        this.r = 1.0;
+        this.alpha = 0.65;
+        this.speed = 0.016;
+      }
+      update() {
+        this.r += this.speed;
+        this.alpha -= 0.015;
+      }
+      draw() {
+        if (this.alpha <= 0) return;
+        ctx.save();
+        ctx.beginPath();
+        for (let i = 0; i <= POLY_SAMPLES; i++) {
+          const pt = heartPoly[i % POLY_SAMPLES];
+          const x = cx + pt.x * heartScaleFactor * this.scale * this.r;
+          const y = cy + pt.y * heartScaleFactor * this.scale * this.r;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = `rgba(255, 120, 200, ${this.alpha * 0.45})`;
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // 7. 宇宙星尘背景粒子
+    class DustParticle {
+      constructor() {
+        this.reset();
+      }
+      reset() {
+        this.x = Math.random() * width;
+        this.y = Math.random() * height;
+        this.vx = (Math.random() - 0.5) * 0.3;
+        this.vy = (Math.random() - 0.5) * 0.3 - 0.15;
+        this.size = Math.random() * 4 + 4;
+        this.alpha = Math.random() * 0.5 + 0.15;
+        this.sprite = glowSprites[Math.random() < 0.5 ? 1 : 2];
+      }
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        if (this.x < 0) this.x = width;
+        if (this.x > width) this.x = 0;
+        if (this.y < 0) this.y = height;
+        if (this.y > height) this.y = 0;
+      }
+      draw() {
+        ctx.globalAlpha = this.alpha;
+        ctx.drawImage(this.sprite, this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
+      }
+    }
+
+    // 8. 优雅微光流星雨
+    class ShootingStar {
+      constructor() {
+        this.reset();
+      }
+      reset() {
+        this.x = Math.random() * width * 1.2;
+        this.y = Math.random() * -height * 0.2;
+        this.length = Math.random() * 70 + 80;
+        this.speed = Math.random() * 6 + 7;
+        this.angle = (Math.PI / 4) + (Math.random() - 0.5) * 0.2;
+        this.vx = Math.cos(this.angle) * this.speed;
+        this.vy = Math.sin(this.angle) * this.speed;
+        this.alpha = Math.random() * 0.8 + 0.2;
+        this.active = false;
+        this.waitTime = Math.random() * 180 + 30;
+      }
+      update() {
+        if (!this.active) {
+          this.waitTime--;
+          if (this.waitTime <= 0) this.active = true;
+          return;
+        }
+        this.x += this.vx;
+        this.y += this.vy;
+        if (this.x > width + 200 || this.y > height + 200) {
+          this.reset();
+        }
+      }
+      draw() {
+        if (!this.active) return;
+        const tailX = this.x - Math.cos(this.angle) * this.length;
+        const tailY = this.y - Math.sin(this.angle) * this.length;
+        const grad = ctx.createLinearGradient(tailX, tailY, this.x, this.y);
+        grad.addColorStop(0, 'rgba(215, 60, 255, 0)');
+        grad.addColorStop(0.65, `rgba(255, 140, 225, ${this.alpha * 0.5})`);
+        grad.addColorStop(1, `rgba(255, 255, 255, ${this.alpha})`);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(tailX, tailY);
+        ctx.lineTo(this.x, this.y);
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 1.6;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 1.6, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${this.alpha})`;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // 9. 触控绽放小火花 + 纪念日烟花（方案[3]专属交互）
+    const tapSparks = [];
+    function addTapBurst(x, y, count = 14, speedMax = 3.2, speedMin = 1.5, sizeBase = 8, decayMin = 0.02) {
+      for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2 + Math.random() * 0.25;
+        const speed = Math.random() * speedMax + speedMin;
+        tapSparks.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          size: Math.random() * 8 + sizeBase,
+          alpha: 1.0,
+          decay: Math.random() * 0.02 + decayMin,
+          sprite: glowSprites[Math.floor(Math.random() * 2)]
+        });
+      }
+    }
+
+    // 10. 流淌深空星云光斑（让宇宙背景呼吸流转，消除死黑）
+    function drawNebula(timeSec) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      const clouds = [
+        { x: cx + Math.sin(timeSec * 0.25) * 90, y: cy + Math.cos(timeSec * 0.2) * 70, r: 240, color: 'rgba(120, 20, 110, 0.12)' },
+        { x: cx - Math.cos(timeSec * 0.2) * 110, y: cy - Math.sin(timeSec * 0.28) * 80, r: 280, color: 'rgba(160, 35, 140, 0.10)' },
+        { x: cx + Math.cos(timeSec * 0.15) * 80, y: cy - 100, r: 200, color: 'rgba(70, 15, 120, 0.14)' }
+      ];
+      clouds.forEach(c => {
+        const grad = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.r);
+        grad.addColorStop(0, c.color);
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(c.x - c.r, c.y - c.r, c.r * 2, c.r * 2);
+      });
+      ctx.restore();
+    }
+
+    // 实例初始化
+    const coreParticles = Array.from({ length: CORE_COUNT }, (_, i) => new HeartParticle(i));
+    const dustParticles = Array.from({ length: 160 }, () => new DustParticle());
+    const shootingStars = Array.from({ length: 3 }, () => new ShootingStar());
+    const pulseWaves = [];
+
+    let startTime = performance.now();
+    let lastWaveCycle = -1;
+    let openingFinished = false;
+
+    function render(timestamp) {
+      const now = timestamp || performance.now();
+      const timeSec = (now - startTime) / 1000;
+      const currentScale = getHeartScale(timeSec);
+
+      // 揭幕完成检查
+      if (!openingFinished && timeSec >= OPENING_DURATION) {
+        openingFinished = true;
+        if (centerTitle) centerTitle.classList.add('visible');
+      }
+
+      // 心跳主峰时光环脉冲检测
+      if (timeSec >= OPENING_DURATION) {
+        const cycle = (timeSec - OPENING_DURATION) % 1.25;
+        if (cycle < 0.16 && lastWaveCycle >= 0.16) {
+          pulseWaves.push(new PulseWave(currentScale));
+        }
+        lastWaveCycle = cycle;
+      }
+
+      // 清屏留存轻微星轨残影
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = 'rgba(12, 2, 16, 0.28)';
+      ctx.fillRect(0, 0, width, height);
+
+      // 流淌星云背景
+      drawNebula(timeSec);
+
+      // 叠加发光混合模式
+      ctx.globalCompositeOperation = 'lighter';
+
+      // 1. 流星雨
+      shootingStars.forEach(s => {
+        s.update();
+        s.draw();
+      });
+
+      // 2. 背景柔光星尘
+      dustParticles.forEach(d => {
+        d.update();
+        d.draw();
+      });
+
+      // 3. 心动扩散光波环
+      for (let i = pulseWaves.length - 1; i >= 0; i--) {
+        const wave = pulseWaves[i];
+        wave.update();
+        wave.draw();
+        if (wave.alpha <= 0) pulseWaves.splice(i, 1);
+      }
+
+      // 4. 核心璀璨爱心粒子群
+      coreParticles.forEach(p => {
+        p.draw(timeSec, currentScale);
+      });
+
+      // 5. 触控小爱心烟花
+      for (let i = tapSparks.length - 1; i >= 0; i--) {
+        const spark = tapSparks[i];
+        spark.x += spark.vx;
+        spark.y += spark.vy;
+        spark.vx *= 0.96;
+        spark.vy *= 0.96;
+        spark.alpha -= spark.decay;
+        if (spark.alpha <= 0) {
+          tapSparks.splice(i, 1);
+          continue;
+        }
+        ctx.globalAlpha = spark.alpha;
+        ctx.drawImage(spark.sprite, spark.x - spark.size / 2, spark.y - spark.size / 2, spark.size, spark.size);
+      }
+
+      ctx.globalAlpha = 1.0;
+      requestAnimationFrame(render);
+    }
+    requestAnimationFrame(render);
+
+    // 11. 触控与交互（支持手指滑动跟随与轻点烟花，移动端零延迟解锁音频）
+    let userMuted = false;
+
+    function handleInteraction(clientX, clientY) {
+      addTapBurst(clientX, clientY);
+      if (hintToast && !hintToast.classList.contains('hidden')) {
+        hintToast.classList.add('hidden');
+      }
+      if (!userMuted) {
+        unlockAndPlayMusic();
+      }
+    }
+
+    window.addEventListener('pointerdown', (e) => {
+      // 避免点击音乐按钮时触发全屏交互
+      if (e.target.closest('#musicBtn')) return;
+      handleInteraction(e.clientX, e.clientY);
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (Math.random() < 0.25) {
+        tapSparks.push({
+          x: e.clientX,
+          y: e.clientY,
+          vx: (Math.random() - 0.5) * 1.2,
+          vy: (Math.random() - 0.5) * 1.2,
+          size: Math.random() * 6 + 4,
+          alpha: 0.8,
+          decay: 0.035,
+          sprite: glowSprites[1]
+        });
+      }
+    });
+
+    // 移动端音频解锁：触摸的 pointerdown 在部分浏览器(如 iOS Safari)不算用户激活，
+    // 因此在 pointerup / touchend 阶段再补一次 resume，确保手机上第一次点就能出声
+    ['pointerup', 'touchend'].forEach(evtName => {
+      window.addEventListener(evtName, () => {
+        if (audioCtx && audioCtx.state === 'suspended') {
+          const p = audioCtx.resume();
+          if (p && typeof p.catch === 'function') p.catch(() => {});
+        }
+        if (audioCtx && !userMuted && !isPlaying) {
+          startMusic();
+        }
+      }, { passive: true });
+    });
+
+    // 12. 纪念日实时精准计时（在一起的日期：2026-11-06）
+    const START_DATE = new Date(2026, 10, 6, 0, 0, 0); // 2026-11-06 00:00:00
+
+    function updateTimer() {
+      const now = new Date();
+      const diffMs = now.getTime() - START_DATE.getTime();
+
+      if (diffMs >= 0) {
+        // 当天或之后：精确计算相恋天数（第一天显示相恋第 1 天）
+        const days = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+        const hours = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
+        const minutes = Math.floor((diffMs / (1000 * 60)) % 60);
+        const seconds = Math.floor((diffMs / 1000) % 60);
+
+        document.getElementById('timerBox').innerHTML =
+          `相伴第 <span class="timer-highlight">${days}</span> 天 · ` +
+          `<span class="timer-highlight">${String(hours).padStart(2, '0')}</span> 时 ` +
+          `<span class="timer-highlight">${String(minutes).padStart(2, '0')}</span> 分 ` +
+          `<span class="timer-highlight">${String(seconds).padStart(2, '0')}</span> 秒`;
+      } else {
+        // 尚未到纪念日时的倒计时保护
+        const remainMs = -diffMs;
+        const days = Math.floor(remainMs / (1000 * 60 * 60 * 24));
+        document.getElementById('timerBox').innerHTML =
+          `距纪念日还有 <span class="timer-highlight">${days}</span> 天`;
+      }
+    }
+    setInterval(updateTimer, 1000);
+    updateTimer();
+
+    // 12-B. 纪念日彩蛋：每逢 11-6，夜空自动绽放玫瑰色烟花
+    const isAnniversaryDay = (() => {
+      const d = new Date();
+      return d.getMonth() === 10 && d.getDate() === 6;
+    })();
+
+    if (isAnniversaryDay) {
+      setTimeout(() => {
+        setInterval(() => {
+          const fx = width * (0.16 + Math.random() * 0.68);
+          const fy = height * (0.10 + Math.random() * 0.42);
+          addTapBurst(fx, fy, 26, 2.6, 1.2, 10, 0.012);
+        }, 4200);
+      }, 2600);
+    }
+
+    // 13. 空灵梦幻 Web Audio 八音盒引擎（双音轨复合谐波 + 水晶琴音）
+    let audioCtx = null;
+    let isPlaying = false;
+    let musicInterval = null;
+
+    function playMusicBoxNote(freq, duration = 1.8) {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+
+      // 主音轨：清澈纯音
+      const osc1 = audioCtx.createOscillator();
+      const gain1 = audioCtx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(freq, now);
+
+      gain1.gain.setValueAtTime(0.001, now);
+      gain1.gain.exponentialRampToValueAtTime(0.14, now + 0.02);
+      gain1.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+      osc1.connect(gain1);
+      gain1.connect(audioCtx.destination);
+      osc1.start(now);
+      osc1.stop(now + duration);
+
+      // 泛音轨：高八度微弱三角波（晶莹八音盒金属共振）
+      const osc2 = audioCtx.createOscillator();
+      const gain2 = audioCtx.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(freq * 2, now);
+
+      gain2.gain.setValueAtTime(0.001, now);
+      gain2.gain.exponentialRampToValueAtTime(0.035, now + 0.015);
+      gain2.gain.exponentialRampToValueAtTime(0.0001, now + duration * 0.7);
+
+      osc2.connect(gain2);
+      gain2.connect(audioCtx.destination);
+      osc2.start(now);
+      osc2.stop(now + duration * 0.7);
+    }
+
+    // 唯美空灵的卡农旋律音符（赫兹）
+    const melodyNotes = [
+      523.25, 659.25, 783.99, 1046.50,
+      880.00, 698.46, 659.25, 587.33,
+      523.25, 659.25, 880.00, 783.99,
+      698.46, 659.25, 587.33, 659.25
+    ];
+    let noteIdx = 0;
+
+    function startMusic() {
+      if (musicInterval) return;
+      isPlaying = true;
+      musicBtn.classList.add('playing');
+      musicInterval = setInterval(() => {
+        const note = melodyNotes[noteIdx % melodyNotes.length];
+        playMusicBoxNote(note, 2.0);
+        // 每隔两拍加入柔和低音和弦衬托
+        if (noteIdx % 2 === 0) {
+          playMusicBoxNote(note * 0.5, 2.6);
+        }
+        noteIdx++;
+      }, 650);
+    }
+
+    function pauseMusic() {
+      isPlaying = false;
+      musicBtn.classList.remove('playing');
+      if (musicInterval) {
+        clearInterval(musicInterval);
+        musicInterval = null;
+      }
+    }
+
+    function unlockAndPlayMusic() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      if (!isPlaying) {
+        startMusic();
+      }
+    }
+
+    // 音乐按钮独立交互（严格阻断冒泡，解决开启关闭死锁 Bug）
+    musicBtn.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      if (isPlaying) {
+        userMuted = true;
+        pauseMusic();
+      } else {
+        userMuted = false;
+        startMusic();
+      }
+    });
+  </script>
+</body>
+</html>
